@@ -1,0 +1,99 @@
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aston_project_db
+    ports:
+      - "5432:5432"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.4
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.4
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
+    ports:
+      - "8025:8025"
+      - "3025:1025"
+
+  discovery-server:
+    build: ../aston-discoveryServer
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+
+  config-server:
+    build: ../aston-configServer
+    container_name: config-server
+    depends_on:
+      - discovery-server
+    ports:
+      - "8888:8888"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+
+  api-gateway:
+    build: ../aston-apiGateway
+    container_name: api-gateway
+    depends_on:
+      - discovery-server
+      - config-server
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+
+  user-service:
+    build: ../aston-project
+    container_name: user-service
+    depends_on:
+      - postgres
+      - kafka
+      - discovery-server
+      - config-server
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+
+  notification-service:
+    build: ../aston-notificationProject
+    container_name: notification-service
+    depends_on:
+      - kafka
+      - mailhog
+      - discovery-server
+      - config-server
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
